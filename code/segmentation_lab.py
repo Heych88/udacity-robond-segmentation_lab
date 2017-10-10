@@ -18,9 +18,9 @@ from utils import plotting_tools
 from utils import model_tools
 
 learning_rate = 0.01
-batch_size = 100
-num_epochs = 3
-steps_per_epoch = 200
+batch_size = 128
+num_epochs = 1
+steps_per_epoch = 500
 validation_steps = 50
 workers = 20
 
@@ -47,7 +47,7 @@ def maxpool(input):
     ksize = [2, 2]
     strides = [2, 2]
     padding = 'same'
-    return layers.MaxPooling2D(pool_size=ksize, strides=strides, padding=padding)(input) # .max_pool(input, ksize, strides, padding)
+    return layers.AveragePooling2D(pool_size=ksize, strides=strides, padding=padding)(input) # .max_pool(input, ksize, strides, padding)
 
 def encoder_block(inputs, filters):
     # TODO Create a separable convolution layer using the separable_conv2d_batchnorm() function.
@@ -72,40 +72,26 @@ def decoder_block(small_ip_layer, filters):
 def fcn_model(inputs, num_classes):
     # TODO Add Encoder Blocks.
     filters = 16
+    keep_prob = 1
     # Remember that with each encoder layer, the depth of your model (the number of filters) increases.
-    # l1 = conv2d_batchnorm(inputs, filters, kernel_size=3, strides=1)
-    '''l1 = conv2d_batchnorm(inputs, filters, strides=1, kernel=1)
-    l2 = separable_conv2d_batchnorm(l1, filters, strides=1, kernel=3)
-    mp1 = maxpool(l2)  # 16 x 16
-    #l2 = encoder_block(inputs, filters, 2)
-    l3 = encoder_block(mp1, filters * 2, 2)
-    l4 = conv2d_batchnorm(l3, filters * 3, kernel=3, strides=2)
-
-    # TODO Add 1x1 Convolution layer using conv2d_batchnorm().
-    kernel_size = 1
-    strides_fcn = 1
-    fcn = conv2d_batchnorm(l4, filters * 4, 1, 1)
-
-    # TODO: Add the same number of Decoder Blocks as the number of Encoder Blocks
-    # x = bilinear_upsample(fcn)
-    x = decoder_block(fcn, l3, filters * 3)
-    x = decoder_block(x, mp1, filters * 2)
-    x = decoder_block(x, inputs, filters)'''
-
-
     l1 = encoder_block(inputs, filters)
+    l1 = keras.layers.core.Dropout(keep_prob)(l1)
     l2 = encoder_block(l1, filters*2)
+    l2 = keras.layers.core.Dropout(keep_prob)(l2)
     l3 = encoder_block(l2, filters * 3)
+    l3 = keras.layers.core.Dropout(keep_prob)(l3)
     l4 = encoder_block(l3, filters * 4)
 
-    fcn = conv2d_batchnorm(l4, filters*5, strides=1, kernel=1)
+    fcn = conv2d_batchnorm(l4, filters*4, strides=1, kernel=1)
 
     # decoder
     x = decoder_block(fcn, filters*4)
     x = decoder_block(x, filters * 3)
+    x = keras.layers.core.Dropout(keep_prob)(x)
 
     x = decoder_block(x, filters * 2)
     x = layers.concatenate([x, l1])
+    x = keras.layers.core.Dropout(keep_prob)(x)
 
     x = decoder_block(x, filters)
     x = layers.concatenate([x, inputs])
@@ -130,7 +116,7 @@ DON'T MODIFY ANYTHING IN THIS CELL THAT IS BELOW THIS LINE
 # Define the Keras model and compile it for training
 model = models.Model(inputs=inputs, outputs=output_layer)
 
-model.compile(optimizer=keras.optimizers.Adam(learning_rate, decay=0.0001), loss='categorical_crossentropy')
+model.compile(optimizer=keras.optimizers.Adam(learning_rate, decay=0.0002), loss='categorical_crossentropy')
 
 # Data iterators for loading the training and validation data
 train_iter = data_iterator.BatchIteratorSimple(batch_size=batch_size,
@@ -152,6 +138,14 @@ model.fit_generator(train_iter,
                     validation_steps = validation_steps, # the number of batches to validate on
                     callbacks=callbacks,
                     workers = workers)
+
+# Save your trained model weights
+weight_file_name = 'model_weights'
+model_tools.save_network(model, weight_file_name)
+
+# If you need to load a model which you previously trained you can uncomment the codeline that calls the function below.
+#weight_file_name = 'model_weights'
+#restored_model = model_tools.load_network(weight_file_name)
 
 # generate predictions, save in the runs, directory.
 run_number = 'run1'
