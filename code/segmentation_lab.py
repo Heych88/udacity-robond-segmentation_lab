@@ -43,21 +43,18 @@ def bilinear_upsample(input_layer):
     output_layer = BilinearUpSampling2D((2,2))(input_layer)
     return output_layer
 
-def maxpool(input):
-    ksize = [2, 2]
-    strides = [2, 2]
-    padding = 'same'
-    return layers.AveragePooling2D(pool_size=ksize, strides=strides, padding=padding)(input) # .max_pool(input, ksize, strides, padding)
+def average_pool(inputs, kernel=2, stride=2, padding='same'):
+    ksize = [kernel, kernel]
+    strides = [stride, stride]
+    return layers.AveragePooling2D(pool_size=ksize, strides=strides, padding=padding)(inputs)
 
-def encoder_block(inputs, filters):
-    # TODO Create a separable convolution layer using the separable_conv2d_batchnorm() function.
-    l1 = separable_conv2d_batchnorm(inputs, filters, strides=1, kernel=1)
-    l2 = separable_conv2d_batchnorm(l1, filters, strides=1, kernel=3)
-    mp1 = maxpool(l2)  # 16 x 16
+def encoder_block(input_layer, filters):
+    x = separable_conv2d_batchnorm(input_layer, filters, strides=1, kernel=1)
+    x = separable_conv2d_batchnorm(x, filters, strides=1, kernel=3)
+    p1 = average_pool(x)
 
-    r1 = separable_conv2d_batchnorm(inputs, filters, strides=2, kernel=3)
-    return layers.concatenate([r1, mp1])
-
+    r1 = separable_conv2d_batchnorm(input_layer, filters, strides=2, kernel=3)
+    return layers.add([r1, p1])
 
 def decoder_block(small_ip_layer, filters):
     x = bilinear_upsample(small_ip_layer)  # 16 x 16
